@@ -1,1 +1,23 @@
-spring.application.name=order-service
+spring:
+  application:
+    name: order-service
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+    enabled: true
+user:
+  service:
+    url: ${USER_SERVICE_URL:http://localhost:8081}
+resilience4j.circuitbreaker:
+  instances:
+    userService:
+      failureRateThreshold: 50
+      waitDurationInOpenState: 5s
+      slidingWindowSize: 10
+feign.circuitbreaker.enabled: true

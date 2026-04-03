@@ -1,0 +1,8 @@
+package com.innowise.orderservice.entity;
+
+public enum OrderStatus {
+  PENDING,
+  PROCESSING,
+  COMPLETED,
+  CANCELLED
+}
