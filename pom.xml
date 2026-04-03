@@ -35,7 +35,7 @@
             <dependency>
                 <groupId>org.springframework.cloud</groupId>
                 <artifactId>spring-cloud-dependencies</artifactId>
-                <version>2023.0.3</version>
+                <version>2025.1.1</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -126,10 +126,14 @@
         <dependency>
             <groupId>org.wiremock.integrations</groupId>
             <artifactId>wiremock-spring-boot</artifactId>
-            <version>4.2.1</version>   <!-- или самая свежая 4.x -->
+            <version>4.2.1</version>
             <scope>test</scope>
         </dependency>
-
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
     </dependencies>
 
     <build>

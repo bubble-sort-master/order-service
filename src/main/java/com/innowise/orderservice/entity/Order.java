@@ -7,7 +7,8 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
-import org.hibernate.annotations.SoftDelete;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,7 +19,8 @@ import java.util.List;
 @EqualsAndHashCode(callSuper = true)
 @Entity
 @Table(name = "orders")
-@SoftDelete
+@SQLDelete(sql = "UPDATE orders SET deleted = true WHERE id = ?")
+@SQLRestriction("deleted = false")
 public class Order extends BaseEntity{
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)

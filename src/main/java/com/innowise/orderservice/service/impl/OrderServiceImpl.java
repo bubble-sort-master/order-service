@@ -142,8 +142,6 @@ public class OrderServiceImpl implements OrderService {
   public void delete(Long id) {
     Order order = orderRepository.findById(id)
             .orElseThrow(() -> new OrderNotFoundException(id));
-
-    order.setDeleted(true);
-    orderRepository.save(order);
+    orderRepository.delete(order);
   }
 }

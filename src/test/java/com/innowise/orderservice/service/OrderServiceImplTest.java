@@ -1,0 +1,262 @@
+package com.innowise.orderservice.service;
+
+import com.innowise.orderservice.client.UserClient;
+import com.innowise.orderservice.dto.request.CreateOrderRequest;
+import com.innowise.orderservice.dto.request.OrderItemRequest;
+import com.innowise.orderservice.dto.request.UpdateOrderRequest;
+import com.innowise.orderservice.dto.response.OrderDto;
+import com.innowise.orderservice.dto.response.OrderResponse;
+import com.innowise.orderservice.dto.response.UserInfoDto;
+import com.innowise.orderservice.entity.Order;
+import com.innowise.orderservice.entity.OrderStatus;
+import com.innowise.orderservice.entity.Item;
+import com.innowise.orderservice.exception.ItemNotFoundException;
+import com.innowise.orderservice.exception.OrderNotFoundException;
+import com.innowise.orderservice.mapper.OrderMapper;
+import com.innowise.orderservice.model.Money;
+import com.innowise.orderservice.repository.ItemRepository;
+import com.innowise.orderservice.repository.OrderRepository;
+import com.innowise.orderservice.service.impl.OrderServiceImpl;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class OrderServiceImplTest {
+
+  @Mock
+  private OrderRepository orderRepository;
+  @Mock
+  private ItemRepository itemRepository;
+  @Mock
+  private UserClient userClient;
+  @Mock
+  private OrderMapper mapper;
+
+  @InjectMocks
+  private OrderServiceImpl orderService;
+
+  private final UserInfoDto testUser = new UserInfoDto(1L, "John", "Doe", "john@example.com", true);
+  private final Item testItem = createItem(10L, "Test Item", Money.of(500L));
+  private final Order testOrder = createOrder(100L, 1L, OrderStatus.PENDING, Money.of(1000L));
+  private final OrderDto testOrderDto = createOrderDto(100L, 1L, OrderStatus.PENDING, BigDecimal.TEN);
+
+  @Test
+  void create_shouldCreateOrderSuccessfully() {
+    CreateOrderRequest request = new CreateOrderRequest(
+            "john@example.com",
+            List.of(new OrderItemRequest(10L, 2))
+    );
+
+    when(userClient.getUserByEmail("john@example.com")).thenReturn(testUser);
+    when(itemRepository.findById(10L)).thenReturn(Optional.of(testItem));
+    when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    when(mapper.toDto(any(Order.class))).thenReturn(testOrderDto);
+
+    OrderResponse response = orderService.create(request);
+
+    assertThat(response).isNotNull();
+    assertThat(response.user()).isEqualTo(testUser);
+    assertThat(response.order()).isEqualTo(testOrderDto);
+
+    ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+    verify(orderRepository).save(orderCaptor.capture());
+    Order savedOrder = orderCaptor.getValue();
+    assertThat(savedOrder.getUserId()).isEqualTo(testUser.id());
+    assertThat(savedOrder.getStatus()).isEqualTo(OrderStatus.PENDING);
+    assertThat(savedOrder.getTotalPrice()).isEqualTo(Money.of(1000L));
+    assertThat(savedOrder.getOrderItems()).hasSize(1);
+  }
+
+  @Test
+  void create_shouldThrowItemNotFoundExceptionWhenItemMissing() {
+    CreateOrderRequest request = new CreateOrderRequest(
+            "john@example.com",
+            List.of(new OrderItemRequest(999L, 1))
+    );
+
+    when(userClient.getUserByEmail("john@example.com")).thenReturn(testUser);
+    when(itemRepository.findById(999L)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> orderService.create(request))
+            .isInstanceOf(ItemNotFoundException.class)
+            .hasMessageContaining("999");
+
+    verify(orderRepository, never()).save(any());
+  }
+
+  @Test
+  void getById_shouldReturnOrderResponseWhenExists() {
+    when(orderRepository.findById(100L)).thenReturn(Optional.of(testOrder));
+    when(userClient.getUserById(1L)).thenReturn(testUser);
+    when(mapper.toDto(testOrder)).thenReturn(testOrderDto);
+
+    OrderResponse response = orderService.getById(100L);
+
+    assertThat(response).isNotNull();
+    assertThat(response.order()).isEqualTo(testOrderDto);
+    assertThat(response.user()).isEqualTo(testUser);
+  }
+
+  @Test
+  void getById_shouldThrowOrderNotFoundExceptionWhenMissing() {
+    when(orderRepository.findById(999L)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> orderService.getById(999L))
+            .isInstanceOf(OrderNotFoundException.class)
+            .hasMessageContaining("999");
+  }
+
+  @Test
+  void getAll_shouldReturnPagedOrderResponses() {
+    Pageable pageable = PageRequest.of(0, 10);
+    List<Order> orders = List.of(testOrder);
+    Page<Order> orderPage = new PageImpl<>(orders, pageable, 1);
+
+    when(orderRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(orderPage);
+    when(userClient.getUserById(1L)).thenReturn(testUser);
+    when(mapper.toDto(any(Order.class))).thenReturn(testOrderDto);
+
+    Page<OrderResponse> result = orderService.getAll(pageable, List.of(OrderStatus.PENDING), null, null);
+
+    assertThat(result).hasSize(1);
+    OrderResponse response = result.getContent().get(0);
+    assertThat(response.order()).isEqualTo(testOrderDto);
+    assertThat(response.user()).isEqualTo(testUser);
+  }
+
+  @Test
+  void getAll_withDateRangeAndStatuses_shouldPassSpecToRepository() {
+    Pageable pageable = PageRequest.of(0, 10);
+    LocalDateTime from = LocalDateTime.now().minusDays(1);
+    LocalDateTime to = LocalDateTime.now();
+    List<OrderStatus> statuses = List.of(OrderStatus.PENDING, OrderStatus.PROCESSING);
+
+    when(orderRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(Page.empty());
+
+    orderService.getAll(pageable, statuses, from, to);
+
+    verify(orderRepository).findAll(any(Specification.class), eq(pageable));
+    verify(userClient, never()).getUserById(any());
+    verify(mapper, never()).toDto(any(Order.class));
+  }
+
+
+  @Test
+  void getByUserId_shouldReturnListOfOrderResponses() {
+    List<Order> orders = List.of(testOrder);
+    when(orderRepository.findByUserId(1L)).thenReturn(orders);
+    when(userClient.getUserById(1L)).thenReturn(testUser);
+    when(mapper.toDto(testOrder)).thenReturn(testOrderDto);
+
+    List<OrderResponse> responses = orderService.getByUserId(1L);
+
+    assertThat(responses).hasSize(1);
+    OrderResponse response = responses.get(0);
+    assertThat(response.order()).isEqualTo(testOrderDto);
+    assertThat(response.user()).isEqualTo(testUser);
+  }
+
+  @Test
+  void getByUserId_shouldReturnEmptyListWhenNoOrders() {
+    when(orderRepository.findByUserId(1L)).thenReturn(List.of());
+
+    List<OrderResponse> responses = orderService.getByUserId(1L);
+
+    assertThat(responses).isEmpty();
+    verify(userClient, never()).getUserById(any());
+    verify(mapper, never()).toDto(any(Order.class));
+  }
+
+  @Test
+  void update_shouldUpdateOrderStatusAndReturnResponse() {
+    UpdateOrderRequest request = new UpdateOrderRequest(OrderStatus.PROCESSING);
+    Order existingOrder = createOrder(100L, 1L, OrderStatus.PENDING, Money.of(1000L));
+    Order updatedOrder = createOrder(100L, 1L, OrderStatus.PROCESSING, Money.of(1000L));
+
+    when(orderRepository.findById(100L)).thenReturn(Optional.of(existingOrder));
+    when(orderRepository.save(any(Order.class))).thenReturn(updatedOrder);
+    when(userClient.getUserById(1L)).thenReturn(testUser);
+    when(mapper.toDto(any(Order.class))).thenReturn(
+            createOrderDto(100L, 1L, OrderStatus.PROCESSING, BigDecimal.TEN)
+    );
+
+    OrderResponse response = orderService.update(100L, request);
+
+    assertThat(response.order().status()).isEqualTo(OrderStatus.PROCESSING);
+    assertThat(response.user()).isEqualTo(testUser);
+
+    ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+    verify(orderRepository).save(orderCaptor.capture());
+    assertThat(orderCaptor.getValue().getStatus()).isEqualTo(OrderStatus.PROCESSING);
+  }
+
+  @Test
+  void update_shouldThrowOrderNotFoundExceptionWhenMissing() {
+    UpdateOrderRequest request = new UpdateOrderRequest(OrderStatus.PROCESSING);
+    when(orderRepository.findById(999L)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> orderService.update(999L, request))
+            .isInstanceOf(OrderNotFoundException.class);
+    verify(orderRepository, never()).save(any());
+  }
+
+  @Test
+  void delete_shouldSoftDeleteOrder() {
+    Order orderToDelete = createOrder(100L, 1L, OrderStatus.PENDING, Money.of(1000L));
+    when(orderRepository.findById(100L)).thenReturn(Optional.of(orderToDelete));
+
+    orderService.delete(100L);
+
+    verify(orderRepository).delete(orderToDelete);
+  }
+
+  @Test
+  void delete_shouldThrowOrderNotFoundExceptionWhenMissing() {
+    when(orderRepository.findById(999L)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> orderService.delete(999L))
+            .isInstanceOf(OrderNotFoundException.class);
+    verify(orderRepository, never()).save(any());
+  }
+
+  private Item createItem(Long id, String name, Money price) {
+    Item item = new Item();
+    item.setId(id);
+    item.setName(name);
+    item.setPrice(price);
+    return item;
+  }
+
+  private Order createOrder(Long id, Long userId, OrderStatus status, Money totalPrice) {
+    Order order = new Order();
+    order.setId(id);
+    order.setUserId(userId);
+    order.setStatus(status);
+    order.setTotalPrice(totalPrice);
+    order.setDeleted(false);
+    return order;
+  }
+
+  private OrderDto createOrderDto(Long id, Long userId, OrderStatus status, BigDecimal totalPrice) {
+    return new OrderDto(id, userId, status, totalPrice, LocalDateTime.now(), List.of());
+  }
+}
