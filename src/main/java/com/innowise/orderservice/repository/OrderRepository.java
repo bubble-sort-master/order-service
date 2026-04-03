@@ -23,6 +23,6 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
   @EntityGraph(attributePaths = {"orderItems", "orderItems.item"})
   Page<Order> findAll(Specification<Order> spec, Pageable pageable);
 
-  @Query("SELECT o FROM Order o WHERE o.id = :id")
+  @Query(value = "SELECT * FROM orders WHERE id = :id", nativeQuery = true)
   Optional<Order> findByIdIncludingDeleted(@Param("id") Long id);
 }
