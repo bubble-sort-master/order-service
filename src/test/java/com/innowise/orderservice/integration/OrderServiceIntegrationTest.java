@@ -69,6 +69,7 @@ class OrderServiceIntegrationTest {
     registry.add("spring.datasource.username", postgres::getUsername);
     registry.add("spring.datasource.password", postgres::getPassword);
     registry.add("user.service.url", () -> "http://localhost:" + wireMockServer.port());
+    registry.add("jwt.secret", () -> "super-secret-key-at-least-32-characters-long-for-hmac-sha256");
   }
 
   @BeforeAll
@@ -92,7 +93,7 @@ class OrderServiceIntegrationTest {
   }
 
   private void stubUserById(Long userId, String email, String name, String surname) {
-    wireMockServer.stubFor(get(urlPathMatching("/users/" + userId))
+    wireMockServer.stubFor(get(urlPathMatching("/api/users/" + userId))
             .willReturn(aResponse()
                     .withStatus(200)
                     .withHeader("Content-Type", "application/json")
@@ -109,7 +110,7 @@ class OrderServiceIntegrationTest {
 
   private void stubUserByEmail(String email, Long userId, String name, String surname) {
     String encodedEmail = email.replace("@", "%40");
-    wireMockServer.stubFor(get(urlPathEqualTo("/users/by-email/" + encodedEmail))
+    wireMockServer.stubFor(get(urlPathEqualTo("/api/users/by-email/" + encodedEmail))
             .willReturn(aResponse()
                     .withStatus(200)
                     .withHeader("Content-Type", "application/json")
@@ -171,7 +172,7 @@ class OrderServiceIntegrationTest {
 
   @Test
   void createOrder_whenUserServiceReturns404_shouldReturn503() throws Exception {
-    wireMockServer.stubFor(get(urlPathMatching("/users/by-email/.*"))
+    wireMockServer.stubFor(get(urlPathMatching("/api/users/by-email/.*"))
             .willReturn(aResponse().withStatus(404)));
 
     CreateOrderRequest request = new CreateOrderRequest("unknown@example.com", List.of(new OrderItemRequest(1L, 1)));
@@ -189,6 +190,7 @@ class OrderServiceIntegrationTest {
             .willReturn(aResponse().withStatus(503)));
 
     CreateOrderRequest request = new CreateOrderRequest("john@example.com", List.of(new OrderItemRequest(1L, 1)));
+
     mockMvc.perform(MockMvcRequestBuilders.post("/api/orders")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(request)))

@@ -2,3 +2,5 @@ spring:
   jpa:
     hibernate:
       ddl-auto: none
+jwt:
+  secret: super-secret-key-at-least-32-characters-long-for-hmac-sha256

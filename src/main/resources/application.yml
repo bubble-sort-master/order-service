@@ -21,3 +21,5 @@ resilience4j.circuitbreaker:
       waitDurationInOpenState: 5s
       slidingWindowSize: 10
 feign.circuitbreaker.enabled: true
+jwt:
+  secret: ${JWT_SECRET}
