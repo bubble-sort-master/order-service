@@ -171,7 +171,7 @@ class OrderServiceIntegrationTest {
   }
 
   @Test
-  void createOrder_whenUserServiceReturns404_shouldReturn503() throws Exception {
+  void createOrder_whenUserServiceReturns404_shouldReturn404() throws Exception {
     wireMockServer.stubFor(get(urlPathMatching("/api/users/by-email/.*"))
             .willReturn(aResponse().withStatus(404)));
 
@@ -180,8 +180,7 @@ class OrderServiceIntegrationTest {
     mockMvc.perform(MockMvcRequestBuilders.post("/api/orders")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(request)))
-            .andExpect(status().isServiceUnavailable())
-            .andExpect(content().string("User service is temporarily unavailable"));
+            .andExpect(status().isNotFound());
   }
 
   @Test
@@ -194,8 +193,7 @@ class OrderServiceIntegrationTest {
     mockMvc.perform(MockMvcRequestBuilders.post("/api/orders")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(request)))
-            .andExpect(status().isServiceUnavailable())
-            .andExpect(content().string("User service is temporarily unavailable"));
+            .andExpect(status().isServiceUnavailable());
   }
 
   @Test

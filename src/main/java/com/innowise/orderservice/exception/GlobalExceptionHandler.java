@@ -3,6 +3,7 @@ package com.innowise.orderservice.exception;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -24,6 +25,18 @@ public class GlobalExceptionHandler {
   public ResponseEntity<String> handleItemNotFound(ItemNotFoundException ex) {
     log.warn("Item not found: {}", ex.getMessage());
     return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ex.getMessage());
+  }
+
+  @ExceptionHandler(UserNotFoundException.class)
+  public ResponseEntity<String> handleUserNotFound(UserNotFoundException ex) {
+    log.warn("User not found: {}", ex.getMessage());
+    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ex.getMessage());
+  }
+
+  @ExceptionHandler(AccessDeniedException.class)
+  public ResponseEntity<String> handleAccessDenied(AccessDeniedException ex) {
+    log.warn("Access denied: {}", ex.getMessage());
+    return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied");
   }
 
   @ExceptionHandler(UserServiceException.class)

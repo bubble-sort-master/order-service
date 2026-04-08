@@ -1,6 +1,10 @@
 spring:
   application:
     name: order-service
+  cloud:
+    openfeign:
+      circuitbreaker:
+        enabled: true
   jpa:
     hibernate:
       ddl-auto: none
@@ -16,10 +20,9 @@ user:
     url: ${USER_SERVICE_URL:http://localhost:8081}
 resilience4j.circuitbreaker:
   instances:
-    userService:
+    user-service:
       failureRateThreshold: 50
       waitDurationInOpenState: 5s
       slidingWindowSize: 10
-feign.circuitbreaker.enabled: true
 jwt:
   secret: ${JWT_SECRET}
