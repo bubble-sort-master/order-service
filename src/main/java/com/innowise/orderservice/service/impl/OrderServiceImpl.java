@@ -4,15 +4,14 @@ import com.innowise.orderservice.client.UserClient;
 import com.innowise.orderservice.dto.request.CreateOrderRequest;
 import com.innowise.orderservice.dto.request.OrderItemRequest;
 import com.innowise.orderservice.dto.request.UpdateOrderRequest;
-import com.innowise.orderservice.dto.response.OrderDto;
 import com.innowise.orderservice.dto.response.OrderResponse;
 import com.innowise.orderservice.dto.response.UserInfoDto;
+import com.innowise.orderservice.entity.Item;
 import com.innowise.orderservice.entity.Order;
 import com.innowise.orderservice.entity.OrderItem;
 import com.innowise.orderservice.entity.OrderStatus;
 import com.innowise.orderservice.exception.ItemNotFoundException;
 import com.innowise.orderservice.exception.OrderNotFoundException;
-import com.innowise.orderservice.exception.UserServiceException;
 import com.innowise.orderservice.mapper.OrderMapper;
 import com.innowise.orderservice.model.Money;
 import com.innowise.orderservice.repository.ItemRepository;
@@ -26,8 +25,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -47,31 +49,17 @@ public class OrderServiceImpl implements OrderService {
     order.setUserId(user.id());
     order.setStatus(OrderStatus.PENDING);
 
-    List<OrderItem> orderItems = new ArrayList<>();
-    Money total = Money.zero();
+    Map<Long, Item> itemMap = getItemsMap(req.items());
 
-    for (OrderItemRequest itemReq : req.items()) {
-      var item = itemRepository.findById(itemReq.itemId())
-              .orElseThrow(() -> new ItemNotFoundException(itemReq.itemId()));
-
-      OrderItem oi = new OrderItem();
-      oi.setOrder(order);
-      oi.setItem(item);
-      oi.setQuantity(itemReq.quantity());
-
-      orderItems.add(oi);
-      total = total.add(item.getPrice().multiply(itemReq.quantity()));
-    }
+    List<OrderItem> orderItems = buildOrderItems(order, req.items(), itemMap);
+    Money totalPrice = calculateTotal(orderItems);
 
     order.setOrderItems(orderItems);
-    order.setTotalPrice(total);
+    order.setTotalPrice(totalPrice);
 
     Order saved = orderRepository.save(order);
 
-    return new OrderResponse(
-            mapper.toDto(saved),
-            user
-    );
+    return new OrderResponse(mapper.toDto(saved), user);
   }
 
   @Override
@@ -81,10 +69,7 @@ public class OrderServiceImpl implements OrderService {
 
     UserInfoDto user = userClient.getUserById(order.getUserId());
 
-    return new OrderResponse(
-            mapper.toDto(order),
-            user
-    );
+    return new OrderResponse(mapper.toDto(order), user);
   }
 
   @Override
@@ -98,10 +83,7 @@ public class OrderServiceImpl implements OrderService {
     return orderRepository.findAll(spec, pageable)
             .map(order -> {
               UserInfoDto user = userClient.getUserById(order.getUserId());
-              return new OrderResponse(
-                      mapper.toDto(order),
-                      user
-              );
+              return new OrderResponse(mapper.toDto(order), user);
             });
   }
 
@@ -112,10 +94,7 @@ public class OrderServiceImpl implements OrderService {
     return orders.stream()
             .map(order -> {
               UserInfoDto user = userClient.getUserById(order.getUserId());
-              return new OrderResponse(
-                      mapper.toDto(order),
-                      user
-              );
+              return new OrderResponse(mapper.toDto(order), user);
             })
             .toList();
   }
@@ -131,10 +110,7 @@ public class OrderServiceImpl implements OrderService {
 
     UserInfoDto user = userClient.getUserById(saved.getUserId());
 
-    return new OrderResponse(
-            mapper.toDto(saved),
-            user
-    );
+    return new OrderResponse(mapper.toDto(saved), user);
   }
 
   @Override
@@ -143,5 +119,51 @@ public class OrderServiceImpl implements OrderService {
     Order order = orderRepository.findById(id)
             .orElseThrow(() -> new OrderNotFoundException(id));
     orderRepository.delete(order);
+  }
+
+  private Map<Long, Item> getItemsMap(List<OrderItemRequest> itemRequests) {
+    List<Long> itemIds = itemRequests.stream()
+            .map(OrderItemRequest::itemId)
+            .distinct()
+            .toList();
+
+    List<Item> items = itemRepository.findAllById(itemIds);
+
+    if (items.size() != itemIds.size()) {
+      Set<Long> foundIds = items.stream().map(Item::getId).collect(Collectors.toSet());
+      List<Long> missingIds = itemIds.stream()
+              .filter(id -> !foundIds.contains(id))
+              .toList();
+      throw new ItemNotFoundException(missingIds);
+    }
+
+    return items.stream()
+            .collect(Collectors.toMap(Item::getId, Function.identity()));
+  }
+
+  private List<OrderItem> buildOrderItems(Order order,
+                                          List<OrderItemRequest> requests,
+                                          Map<Long, Item> itemMap) {
+    return requests.stream()
+            .map(req -> {
+              Item item = itemMap.get(req.itemId());
+
+              OrderItem oi = new OrderItem();
+              oi.setOrder(order);
+              oi.setItem(item);
+              oi.setQuantity(req.quantity());
+
+              return oi;
+            })
+            .toList();
+  }
+
+  private Money calculateTotal(List<OrderItem> orderItems) {
+    Money total = Money.zero();
+
+    for (OrderItem oi : orderItems) {
+      total = total.add(oi.getItem().getPrice().multiply(oi.getQuantity()));
+    }
+    return total;
   }
 }

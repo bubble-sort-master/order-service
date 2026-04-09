@@ -167,7 +167,7 @@ class OrderServiceIntegrationTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isBadRequest())
-            .andExpect(content().string("Item with id 999 not found"));
+            .andExpect(content().string("Missing items: [999]"));
   }
 
   @Test

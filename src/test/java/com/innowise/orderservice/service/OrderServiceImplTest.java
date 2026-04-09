@@ -67,7 +67,10 @@ class OrderServiceImplTest {
     );
 
     when(userClient.getUserByEmail("john@example.com")).thenReturn(testUser);
-    when(itemRepository.findById(10L)).thenReturn(Optional.of(testItem));
+
+    List<Long> requestedIds = List.of(10L);
+    when(itemRepository.findAllById(requestedIds)).thenReturn(List.of(testItem));
+
     when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
     when(mapper.toDto(any(Order.class))).thenReturn(testOrderDto);
 
@@ -84,6 +87,9 @@ class OrderServiceImplTest {
     assertThat(savedOrder.getStatus()).isEqualTo(OrderStatus.PENDING);
     assertThat(savedOrder.getTotalPrice()).isEqualTo(Money.of(1000L));
     assertThat(savedOrder.getOrderItems()).hasSize(1);
+
+    verify(itemRepository).findAllById(requestedIds);
+    verify(itemRepository, never()).findById(anyLong());
   }
 
   @Test
@@ -94,13 +100,15 @@ class OrderServiceImplTest {
     );
 
     when(userClient.getUserByEmail("john@example.com")).thenReturn(testUser);
-    when(itemRepository.findById(999L)).thenReturn(Optional.empty());
+
+    when(itemRepository.findAllById(List.of(999L))).thenReturn(List.of());
 
     assertThatThrownBy(() -> orderService.create(request))
             .isInstanceOf(ItemNotFoundException.class)
-            .hasMessageContaining("999");
+            .hasMessageContaining("Missing items: [999]");
 
     verify(orderRepository, never()).save(any());
+    verify(itemRepository).findAllById(List.of(999L));
   }
 
   @Test
