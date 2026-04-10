@@ -5,6 +5,9 @@ import com.innowise.orderservice.dto.response.UserInfoDto;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
+
+import java.util.List;
 
 @FeignClient(
         name = "user-service",
@@ -19,4 +22,7 @@ public interface UserClient {
 
   @GetMapping("/api/users/{id}")
   UserInfoDto getUserById(@PathVariable Long id);
+
+  @GetMapping("/api/users/bulk")
+  List<UserInfoDto> getUsersByIds(@RequestParam("ids") List<Long> ids);
 }

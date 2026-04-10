@@ -13,6 +13,7 @@ import com.innowise.orderservice.entity.OrderStatus;
 import com.innowise.orderservice.entity.Item;
 import com.innowise.orderservice.exception.ItemNotFoundException;
 import com.innowise.orderservice.exception.OrderNotFoundException;
+import com.innowise.orderservice.exception.UserNotFoundException;
 import com.innowise.orderservice.mapper.OrderMapper;
 import com.innowise.orderservice.mapper.OrderItemMapper;
 import com.innowise.orderservice.model.Money;
@@ -155,7 +156,7 @@ class OrderServiceImplTest {
     Page<Order> orderPage = new PageImpl<>(orders, pageable, 1);
 
     when(orderRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(orderPage);
-    when(userClient.getUserById(1L)).thenReturn(testUser);
+    when(userClient.getUsersByIds(anyList())).thenReturn(List.of(testUser));
     when(mapper.toDto(any(Order.class))).thenReturn(testOrderDto);
 
     Page<OrderResponse> result = orderService.getAll(pageable, List.of(OrderStatus.PENDING), null, null);
@@ -178,8 +179,22 @@ class OrderServiceImplTest {
     orderService.getAll(pageable, statuses, from, to);
 
     verify(orderRepository).findAll(any(Specification.class), eq(pageable));
-    verify(userClient, never()).getUserById(any());
+    verify(userClient, never()).getUsersByIds(anyList());
     verify(mapper, never()).toDto(any(Order.class));
+  }
+
+  @Test
+  void getAll_shouldThrowUserNotFoundExceptionWhenUserMissingInBatch() {
+    Pageable pageable = PageRequest.of(0, 10);
+    List<Order> orders = List.of(testOrder);
+    Page<Order> orderPage = new PageImpl<>(orders, pageable, 1);
+
+    when(orderRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(orderPage);
+    when(userClient.getUsersByIds(anyList())).thenReturn(List.of());
+
+    assertThatThrownBy(() -> orderService.getAll(pageable, List.of(OrderStatus.PENDING), null, null))
+            .isInstanceOf(UserNotFoundException.class)
+            .hasMessageContaining("1");
   }
 
   @Test

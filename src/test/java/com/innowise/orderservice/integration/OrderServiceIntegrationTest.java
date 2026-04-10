@@ -8,6 +8,7 @@ import com.innowise.orderservice.dto.request.UpdateOrderRequest;
 import com.innowise.orderservice.entity.Item;
 import com.innowise.orderservice.entity.Order;
 import com.innowise.orderservice.entity.OrderStatus;
+import com.innowise.orderservice.exception.UserNotFoundException;
 import com.innowise.orderservice.model.Money;
 import com.innowise.orderservice.repository.ItemRepository;
 import com.innowise.orderservice.repository.OrderRepository;
@@ -35,6 +36,7 @@ import java.util.List;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest
@@ -248,8 +250,7 @@ class OrderServiceIntegrationTest {
   @Test
   void getAll_shouldReturnPagedOrdersWithUsers() throws Exception {
     Long userId1 = 1L, userId2 = 2L;
-    stubUserById(userId1, "u1@test.com", "A", "B");
-    stubUserById(userId2, "u2@test.com", "C", "D");
+    stubUsersBulk(userId1, userId2);
 
     Order order1 = new Order();
     order1.setUserId(userId1);
@@ -275,7 +276,7 @@ class OrderServiceIntegrationTest {
   @Test
   void getAll_withStatusFilter_shouldReturnFilteredOrders() throws Exception {
     Long userId = 1L;
-    stubUserById(userId, "filter@test.com", "X", "Y");
+    stubUsersBulk(userId);
 
     Order pending = new Order();
     pending.setUserId(userId);
@@ -293,6 +294,35 @@ class OrderServiceIntegrationTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.content.length()").value(1))
             .andExpect(jsonPath("$.content[0].order.status").value("PENDING"));
+  }
+
+  @Test
+  void getAll_whenUserNotFoundInBatch_shouldReturn404() throws Exception {
+    Long existingUserId = 1L;
+    Long missingUserId = 999L;
+
+    stubUsersBulkWithPartialResult(existingUserId);
+
+    Order order1 = new Order();
+    order1.setUserId(existingUserId);
+    order1.setStatus(OrderStatus.PENDING);
+    order1.setTotalPrice(Money.of(100L));
+
+    Order order2 = new Order();
+    order2.setUserId(missingUserId);
+    order2.setStatus(OrderStatus.PROCESSING);
+    order2.setTotalPrice(Money.of(200L));
+
+    orderRepository.saveAll(List.of(order1, order2));
+
+    mockMvc.perform(MockMvcRequestBuilders.get("/api/orders?page=0&size=10"))
+            .andExpect(status().isNotFound())
+            .andExpect(content().string(containsString(String.valueOf(missingUserId))))
+            .andExpect(content().string(containsString("User")))
+            .andExpect(result -> {
+              String body = result.getResponse().getContentAsString();
+              assertThat(body).contains("999");
+            });
   }
 
   @Test
@@ -390,5 +420,51 @@ class OrderServiceIntegrationTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isBadRequest());
+  }
+
+  private void stubUsersBulk(Long... userIds) {
+    StringBuilder body = new StringBuilder("[");
+    for (int i = 0; i < userIds.length; i++) {
+      Long id = userIds[i];
+      String email = "u" + id + "@test.com";
+      String name = "User" + id;
+      String surname = "Test" + id;
+      body.append(String.format("""
+            {"id": %d, "name": "%s", "surname": "%s", "email": "%s", "active": true}
+            """, id, name, surname, email));
+      if (i < userIds.length - 1) body.append(",");
+    }
+    body.append("]");
+
+    wireMockServer.stubFor(get(urlPathEqualTo("/api/users/bulk"))
+            .willReturn(aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "application/json")
+                    .withBody(body.toString())));
+  }
+
+  private void stubUsersBulkWithPartialResult(Long... existingUserIds) {
+    StringBuilder body = new StringBuilder("[");
+    for (int i = 0; i < existingUserIds.length; i++) {
+      Long id = existingUserIds[i];
+      String email = "u" + id + "@test.com";
+      String name = "User" + id;
+      String surname = "Test" + id;
+
+      body.append(String.format("""
+            {"id": %d, "name": "%s", "surname": "%s", "email": "%s", "active": true}
+            """, id, name, surname, email));
+
+      if (i < existingUserIds.length - 1) {
+        body.append(",");
+      }
+    }
+    body.append("]");
+
+    wireMockServer.stubFor(get(urlPathEqualTo("/api/users/bulk"))
+            .willReturn(aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "application/json")
+                    .withBody(body.toString())));
   }
 }

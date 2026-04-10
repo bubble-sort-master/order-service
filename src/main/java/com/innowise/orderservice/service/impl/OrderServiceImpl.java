@@ -12,6 +12,7 @@ import com.innowise.orderservice.entity.OrderStatus;
 import com.innowise.orderservice.entity.Item;
 import com.innowise.orderservice.exception.ItemNotFoundException;
 import com.innowise.orderservice.exception.OrderNotFoundException;
+import com.innowise.orderservice.exception.UserNotFoundException;
 import com.innowise.orderservice.mapper.OrderItemMapper;
 import com.innowise.orderservice.mapper.OrderMapper;
 import com.innowise.orderservice.model.Money;
@@ -26,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -90,23 +92,39 @@ public class OrderServiceImpl implements OrderService {
                                     LocalDateTime to) {
 
     var spec = OrderSpecifications.searchByDateRangeAndStatus(statuses, from, to);
+    Page<Order> orderPage = orderRepository.findAll(spec, pageable);
 
-    return orderRepository.findAll(spec, pageable)
-            .map(order -> {
-              UserInfoDto user = userClient.getUserById(order.getUserId());
-              return new OrderResponse(mapper.toDto(order), user);
-            });
+    Set<Long> userIds = orderPage.getContent().stream()
+            .map(Order::getUserId)
+            .collect(Collectors.toSet());
+
+    Map<Long, UserInfoDto> userMap = userIds.isEmpty()
+            ? Map.of()
+            : userClient.getUsersByIds(new ArrayList<>(userIds))
+            .stream()
+            .collect(Collectors.toMap(UserInfoDto::id, Function.identity()));
+
+    return orderPage.map(order -> {
+      UserInfoDto user = userMap.get(order.getUserId());
+      if (user == null) {
+        throw new UserNotFoundException(order.getUserId());
+      }
+      return new OrderResponse(mapper.toDto(order), user);
+    });
   }
 
   @Override
   public List<OrderResponse> getByUserId(Long userId) {
     List<Order> orders = orderRepository.findByUserId(userId);
 
+    if (orders.isEmpty()) {
+      return List.of();
+    }
+
+    UserInfoDto user = userClient.getUserById(userId);
+
     return orders.stream()
-            .map(order -> {
-              UserInfoDto user = userClient.getUserById(order.getUserId());
-              return new OrderResponse(mapper.toDto(order), user);
-            })
+            .map(order -> new OrderResponse(mapper.toDto(order), user))
             .toList();
   }
 
