@@ -133,7 +133,7 @@ class OrderServiceIntegrationTest {
   }
 
   @Test
-  void createOrder_shouldReturn200AndSaveOrder() throws Exception {
+  void createOrder_shouldReturn201AndSaveOrder() throws Exception {
     Long userId = 1L;
     String userEmail = "john@example.com";
     stubUserByEmail(userEmail, userId, "John", "Doe");
@@ -143,7 +143,7 @@ class OrderServiceIntegrationTest {
     mockMvc.perform(MockMvcRequestBuilders.post("/api/orders")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(request)))
-            .andExpect(status().isOk())
+            .andExpect(status().isCreated())
             .andExpect(jsonPath("$.order.status").value("PENDING"))
             .andExpect(jsonPath("$.order.totalPrice").value(200.00))
             .andExpect(jsonPath("$.user.id").value(userId))

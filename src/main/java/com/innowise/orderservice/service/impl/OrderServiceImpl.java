@@ -6,18 +6,19 @@ import com.innowise.orderservice.dto.request.OrderItemRequest;
 import com.innowise.orderservice.dto.request.UpdateOrderRequest;
 import com.innowise.orderservice.dto.response.OrderResponse;
 import com.innowise.orderservice.dto.response.UserInfoDto;
-import com.innowise.orderservice.entity.Item;
 import com.innowise.orderservice.entity.Order;
 import com.innowise.orderservice.entity.OrderItem;
 import com.innowise.orderservice.entity.OrderStatus;
+import com.innowise.orderservice.entity.Item;
 import com.innowise.orderservice.exception.ItemNotFoundException;
 import com.innowise.orderservice.exception.OrderNotFoundException;
+import com.innowise.orderservice.mapper.OrderItemMapper;
 import com.innowise.orderservice.mapper.OrderMapper;
 import com.innowise.orderservice.model.Money;
 import com.innowise.orderservice.repository.ItemRepository;
 import com.innowise.orderservice.repository.OrderRepository;
-import com.innowise.orderservice.specification.OrderSpecifications;
 import com.innowise.orderservice.service.OrderService;
+import com.innowise.orderservice.specification.OrderSpecifications;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -39,19 +40,29 @@ public class OrderServiceImpl implements OrderService {
   private final ItemRepository itemRepository;
   private final UserClient userClient;
   private final OrderMapper mapper;
+  private final OrderItemMapper orderItemMapper;
 
   @Override
   @Transactional
   public OrderResponse create(CreateOrderRequest req) {
     UserInfoDto user = userClient.getUserByEmail(req.userEmail());
 
-    Order order = new Order();
+    Order order = mapper.toEntity(req);
     order.setUserId(user.id());
     order.setStatus(OrderStatus.PENDING);
 
     Map<Long, Item> itemMap = getItemsMap(req.items());
 
-    List<OrderItem> orderItems = buildOrderItems(order, req.items(), itemMap);
+    List<OrderItem> orderItems = req.items().stream()
+            .map(itemReq -> {
+              Item item = itemMap.get(itemReq.itemId());
+              OrderItem oi = orderItemMapper.toEntity(itemReq);
+              oi.setOrder(order);
+              oi.setItem(item);
+              return oi;
+            })
+            .toList();
+
     Money totalPrice = calculateTotal(orderItems);
 
     order.setOrderItems(orderItems);
@@ -105,7 +116,8 @@ public class OrderServiceImpl implements OrderService {
     Order order = orderRepository.findById(id)
             .orElseThrow(() -> new OrderNotFoundException(id));
 
-    order.setStatus(req.status());
+    mapper.updateEntityFromRequest(req, order);
+
     Order saved = orderRepository.save(order);
 
     UserInfoDto user = userClient.getUserById(saved.getUserId());
@@ -139,23 +151,6 @@ public class OrderServiceImpl implements OrderService {
 
     return items.stream()
             .collect(Collectors.toMap(Item::getId, Function.identity()));
-  }
-
-  private List<OrderItem> buildOrderItems(Order order,
-                                          List<OrderItemRequest> requests,
-                                          Map<Long, Item> itemMap) {
-    return requests.stream()
-            .map(req -> {
-              Item item = itemMap.get(req.itemId());
-
-              OrderItem oi = new OrderItem();
-              oi.setOrder(order);
-              oi.setItem(item);
-              oi.setQuantity(req.quantity());
-
-              return oi;
-            })
-            .toList();
   }
 
   private Money calculateTotal(List<OrderItem> orderItems) {

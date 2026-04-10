@@ -8,11 +8,13 @@ import com.innowise.orderservice.dto.response.OrderDto;
 import com.innowise.orderservice.dto.response.OrderResponse;
 import com.innowise.orderservice.dto.response.UserInfoDto;
 import com.innowise.orderservice.entity.Order;
+import com.innowise.orderservice.entity.OrderItem;
 import com.innowise.orderservice.entity.OrderStatus;
 import com.innowise.orderservice.entity.Item;
 import com.innowise.orderservice.exception.ItemNotFoundException;
 import com.innowise.orderservice.exception.OrderNotFoundException;
 import com.innowise.orderservice.mapper.OrderMapper;
+import com.innowise.orderservice.mapper.OrderItemMapper;
 import com.innowise.orderservice.model.Money;
 import com.innowise.orderservice.repository.ItemRepository;
 import com.innowise.orderservice.repository.OrderRepository;
@@ -50,6 +52,8 @@ class OrderServiceImplTest {
   private UserClient userClient;
   @Mock
   private OrderMapper mapper;
+  @Mock
+  private OrderItemMapper orderItemMapper;
 
   @InjectMocks
   private OrderServiceImpl orderService;
@@ -66,7 +70,15 @@ class OrderServiceImplTest {
             List.of(new OrderItemRequest(10L, 2))
     );
 
+    Order orderToSave = new Order();
+
     when(userClient.getUserByEmail("john@example.com")).thenReturn(testUser);
+    when(mapper.toEntity(any(CreateOrderRequest.class))).thenReturn(orderToSave);
+    when(orderItemMapper.toEntity(any(OrderItemRequest.class))).thenAnswer(invocation -> {
+      OrderItem oi = new OrderItem();
+      oi.setQuantity(invocation.getArgument(0, OrderItemRequest.class).quantity());
+      return oi;
+    });
 
     List<Long> requestedIds = List.of(10L);
     when(itemRepository.findAllById(requestedIds)).thenReturn(List.of(testItem));
@@ -83,13 +95,15 @@ class OrderServiceImplTest {
     ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
     verify(orderRepository).save(orderCaptor.capture());
     Order savedOrder = orderCaptor.getValue();
+
     assertThat(savedOrder.getUserId()).isEqualTo(testUser.id());
     assertThat(savedOrder.getStatus()).isEqualTo(OrderStatus.PENDING);
     assertThat(savedOrder.getTotalPrice()).isEqualTo(Money.of(1000L));
     assertThat(savedOrder.getOrderItems()).hasSize(1);
 
     verify(itemRepository).findAllById(requestedIds);
-    verify(itemRepository, never()).findById(anyLong());
+    verify(mapper).toEntity(any(CreateOrderRequest.class));
+    verify(orderItemMapper).toEntity(any(OrderItemRequest.class));
   }
 
   @Test
@@ -100,6 +114,7 @@ class OrderServiceImplTest {
     );
 
     when(userClient.getUserByEmail("john@example.com")).thenReturn(testUser);
+    when(mapper.toEntity(any(CreateOrderRequest.class))).thenReturn(new Order());
 
     when(itemRepository.findAllById(List.of(999L))).thenReturn(List.of());
 
@@ -167,7 +182,6 @@ class OrderServiceImplTest {
     verify(mapper, never()).toDto(any(Order.class));
   }
 
-
   @Test
   void getByUserId_shouldReturnListOfOrderResponses() {
     List<Order> orders = List.of(testOrder);
@@ -198,14 +212,20 @@ class OrderServiceImplTest {
   void update_shouldUpdateOrderStatusAndReturnResponse() {
     UpdateOrderRequest request = new UpdateOrderRequest(OrderStatus.PROCESSING);
     Order existingOrder = createOrder(100L, 1L, OrderStatus.PENDING, Money.of(1000L));
-    Order updatedOrder = createOrder(100L, 1L, OrderStatus.PROCESSING, Money.of(1000L));
 
     when(orderRepository.findById(100L)).thenReturn(Optional.of(existingOrder));
-    when(orderRepository.save(any(Order.class))).thenReturn(updatedOrder);
+    when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
     when(userClient.getUserById(1L)).thenReturn(testUser);
     when(mapper.toDto(any(Order.class))).thenReturn(
             createOrderDto(100L, 1L, OrderStatus.PROCESSING, BigDecimal.TEN)
     );
+
+    doAnswer(invocation -> {
+      Order target = invocation.getArgument(1);
+      UpdateOrderRequest req = invocation.getArgument(0);
+      target.setStatus(req.status());
+      return null;
+    }).when(mapper).updateEntityFromRequest(any(UpdateOrderRequest.class), any(Order.class));
 
     OrderResponse response = orderService.update(100L, request);
 
@@ -215,6 +235,8 @@ class OrderServiceImplTest {
     ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
     verify(orderRepository).save(orderCaptor.capture());
     assertThat(orderCaptor.getValue().getStatus()).isEqualTo(OrderStatus.PROCESSING);
+
+    verify(mapper).updateEntityFromRequest(any(UpdateOrderRequest.class), any(Order.class));
   }
 
   @Test
