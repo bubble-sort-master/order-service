@@ -11,6 +11,8 @@ import com.innowise.orderservice.entity.Order;
 import com.innowise.orderservice.entity.OrderItem;
 import com.innowise.orderservice.entity.OrderStatus;
 import com.innowise.orderservice.entity.Item;
+import com.innowise.orderservice.event.PaymentEvent;
+import com.innowise.orderservice.event.PaymentStatus;
 import com.innowise.orderservice.exception.ItemNotFoundException;
 import com.innowise.orderservice.exception.OrderNotFoundException;
 import com.innowise.orderservice.exception.UserNotFoundException;
@@ -281,6 +283,58 @@ class OrderServiceImplTest {
     assertThatThrownBy(() -> orderService.delete(999L))
             .isInstanceOf(OrderNotFoundException.class);
     verify(orderRepository, never()).save(any());
+  }
+
+  @Test
+  void processPaymentEvent_shouldUpdateStatusToProcessingWhenSuccess() {
+    PaymentEvent event = new PaymentEvent(100L, PaymentStatus.SUCCESS, LocalDateTime.now());
+    Order order = createOrder(100L, 1L, OrderStatus.PENDING, Money.of(1000L));
+
+    when(orderRepository.findById(100L)).thenReturn(Optional.of(order));
+    when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+
+    orderService.processPaymentEvent(event);
+
+    ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
+    verify(orderRepository).save(captor.capture());
+    assertThat(captor.getValue().getStatus()).isEqualTo(OrderStatus.PROCESSING);
+  }
+
+  @Test
+  void processPaymentEvent_shouldUpdateStatusToFailedWhenFailed() {
+    PaymentEvent event = new PaymentEvent(100L, PaymentStatus.FAILED, LocalDateTime.now());
+    Order order = createOrder(100L, 1L, OrderStatus.PENDING, Money.of(1000L));
+
+    when(orderRepository.findById(100L)).thenReturn(Optional.of(order));
+    when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+
+    orderService.processPaymentEvent(event);
+
+    ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
+    verify(orderRepository).save(captor.capture());
+    assertThat(captor.getValue().getStatus()).isEqualTo(OrderStatus.FAILED);
+  }
+
+  @Test
+  void processPaymentEvent_shouldSkipWhenAlreadyInTargetStatus() {
+    PaymentEvent event = new PaymentEvent(100L, PaymentStatus.SUCCESS, LocalDateTime.now());
+    Order order = createOrder(100L, 1L, OrderStatus.PROCESSING, Money.of(1000L));
+
+    when(orderRepository.findById(100L)).thenReturn(Optional.of(order));
+
+    orderService.processPaymentEvent(event);
+
+    verify(orderRepository, never()).save(any());
+  }
+
+  @Test
+  void processPaymentEvent_shouldThrowOrderNotFoundExceptionWhenMissing() {
+    PaymentEvent event = new PaymentEvent(999L, PaymentStatus.SUCCESS, LocalDateTime.now());
+    when(orderRepository.findById(999L)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> orderService.processPaymentEvent(event))
+            .isInstanceOf(OrderNotFoundException.class)
+            .hasMessageContaining("999");
   }
 
   private Item createItem(Long id, String name, Money price) {

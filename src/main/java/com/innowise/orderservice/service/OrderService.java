@@ -4,6 +4,7 @@ import com.innowise.orderservice.dto.request.CreateOrderRequest;
 import com.innowise.orderservice.dto.request.UpdateOrderRequest;
 import com.innowise.orderservice.dto.response.OrderResponse;
 import com.innowise.orderservice.entity.OrderStatus;
+import com.innowise.orderservice.event.PaymentEvent;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -98,4 +99,17 @@ public interface OrderService {
    *         if order with the given ID does not exist.
    */
   void delete(Long id);
+
+  /**
+   * Processes a payment event received from Kafka and updates order status accordingly.
+   * <ul>
+   *   <li>If payment status is SUCCESS, the order moves to PROCESSING.</li>
+   *   <li>If payment status is FAILED, the order moves to FAILED.</li>
+   * </ul>
+   * <p>
+   * The method is idempotent: if the order already has the expected status, it is skipped.
+   *
+   * @param event the payment event (must not be null)
+   */
+  void processPaymentEvent(PaymentEvent event);
 }
