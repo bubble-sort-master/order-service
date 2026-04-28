@@ -53,7 +53,6 @@ import static org.awaitility.Awaitility.await;
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
 @ActiveProfiles("test")
-@Transactional
 @Import(TestKafkaProducerConfig.class)
 class OrderServiceIntegrationTest {
 
