@@ -10,6 +10,7 @@ import com.innowise.orderservice.entity.Order;
 import com.innowise.orderservice.entity.OrderItem;
 import com.innowise.orderservice.entity.OrderStatus;
 import com.innowise.orderservice.entity.Item;
+import com.innowise.orderservice.event.PaymentEvent;
 import com.innowise.orderservice.exception.ItemNotFoundException;
 import com.innowise.orderservice.exception.OrderNotFoundException;
 import com.innowise.orderservice.exception.UserNotFoundException;
@@ -178,5 +179,24 @@ public class OrderServiceImpl implements OrderService {
       total = total.add(oi.getItem().getPrice().multiply(oi.getQuantity()));
     }
     return total;
+  }
+
+  @Override
+  @Transactional
+  public void processPaymentEvent(PaymentEvent event) {
+    Order order = orderRepository.findById(event.orderId())
+            .orElseThrow(() -> new OrderNotFoundException(event.orderId()));
+
+    OrderStatus newStatus = switch (event.status()) {
+      case SUCCESS -> OrderStatus.PROCESSING;
+      case FAILED -> OrderStatus.FAILED;
+    };
+
+    if (order.getStatus() == newStatus) {
+      return;
+    }
+
+    order.setStatus(newStatus);
+    orderRepository.save(order);
   }
 }

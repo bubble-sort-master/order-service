@@ -2,12 +2,15 @@ package com.innowise.orderservice.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.WireMockServer;
+import com.innowise.orderservice.config.TestKafkaProducerConfig;
 import com.innowise.orderservice.dto.request.CreateOrderRequest;
 import com.innowise.orderservice.dto.request.OrderItemRequest;
 import com.innowise.orderservice.dto.request.UpdateOrderRequest;
 import com.innowise.orderservice.entity.Item;
 import com.innowise.orderservice.entity.Order;
 import com.innowise.orderservice.entity.OrderStatus;
+import com.innowise.orderservice.event.PaymentEvent;
+import com.innowise.orderservice.event.PaymentStatus;
 import com.innowise.orderservice.exception.UserNotFoundException;
 import com.innowise.orderservice.model.Money;
 import com.innowise.orderservice.repository.ItemRepository;
@@ -18,7 +21,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -30,19 +35,26 @@ import org.springframework.web.context.WebApplicationContext;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import org.testcontainers.kafka.KafkaContainer;
+import static org.awaitility.Awaitility.await;
+
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
 @ActiveProfiles("test")
 @Transactional
+@Import(TestKafkaProducerConfig.class)
 class OrderServiceIntegrationTest {
 
   private static WireMockServer wireMockServer = new WireMockServer(0);
@@ -53,6 +65,11 @@ class OrderServiceIntegrationTest {
           .withUsername("test")
           .withPassword("test");
 
+  @Container
+  static final KafkaContainer kafka = new KafkaContainer(
+          DockerImageName.parse("apache/kafka-native:3.8.0")
+  ).withStartupTimeout(Duration.ofMinutes(3));
+
   @Autowired
   private WebApplicationContext context;
 
@@ -61,6 +78,9 @@ class OrderServiceIntegrationTest {
 
   @Autowired
   private ItemRepository itemRepository;
+
+  @Autowired
+  private KafkaTemplate<String, PaymentEvent> kafkaTemplate;
 
   private final ObjectMapper objectMapper = new ObjectMapper();
   private MockMvc mockMvc;
@@ -72,7 +92,9 @@ class OrderServiceIntegrationTest {
     registry.add("spring.datasource.password", postgres::getPassword);
     registry.add("user.service.url", () -> "http://localhost:" + wireMockServer.port());
     registry.add("jwt.secret", () -> "super-secret-key-at-least-32-characters-long-for-hmac-sha256");
+    registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
   }
+
 
   @BeforeAll
   static void startWireMock() {
@@ -92,6 +114,49 @@ class OrderServiceIntegrationTest {
     wireMockServer.resetAll();
     orderRepository.deleteAll();
     itemRepository.deleteAll();
+  }
+
+  @Test
+  void kafkaListener_shouldUpdateOrderStatusToProcessingOnSuccess() throws Exception {
+    // Создаём заказ
+    Long userId = 1L;
+    stubUserById(userId, "john@example.com", "John", "Doe");
+    Order order = new Order();
+    order.setUserId(userId);
+    order.setStatus(OrderStatus.PENDING);
+    order.setTotalPrice(Money.of(1000L));
+    order.setDeleted(false);
+    Order saved = orderRepository.save(order);
+
+    // Отправляем событие
+    PaymentEvent event = new PaymentEvent(saved.getId(), PaymentStatus.SUCCESS, LocalDateTime.now());
+    kafkaTemplate.send("payment-events", String.valueOf(saved.getId()), event).get(5, TimeUnit.SECONDS);
+
+    // Ждём асинхронной обработки
+    await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
+      Order updated = orderRepository.findById(saved.getId()).orElseThrow();
+      assertThat(updated.getStatus()).isEqualTo(OrderStatus.PROCESSING);
+    });
+  }
+
+  @Test
+  void kafkaListener_shouldUpdateOrderStatusToFailedOnFailed() throws Exception {
+    Long userId = 1L;
+    stubUserById(userId, "john@example.com", "John", "Doe");
+    Order order = new Order();
+    order.setUserId(userId);
+    order.setStatus(OrderStatus.PENDING);
+    order.setTotalPrice(Money.of(1000L));
+    order.setDeleted(false);
+    Order saved = orderRepository.save(order);
+
+    PaymentEvent event = new PaymentEvent(saved.getId(), PaymentStatus.FAILED, LocalDateTime.now());
+    kafkaTemplate.send("payment-events", String.valueOf(saved.getId()), event).get(5, TimeUnit.SECONDS);
+
+    await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
+      Order updated = orderRepository.findById(saved.getId()).orElseThrow();
+      assertThat(updated.getStatus()).isEqualTo(OrderStatus.FAILED);
+    });
   }
 
   private void stubUserById(Long userId, String email, String name, String surname) {
