@@ -28,6 +28,8 @@ public class KafkaConsumerConfig {
     props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
     props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JacksonJsonDeserializer.class);
     props.put(JacksonJsonDeserializer.TRUSTED_PACKAGES, "com.innowise.orderservice.event");
+    props.put(JacksonJsonDeserializer.USE_TYPE_INFO_HEADERS, false);
+    props.put(JacksonJsonDeserializer.VALUE_DEFAULT_TYPE, PaymentEvent.class);
     return new DefaultKafkaConsumerFactory<>(props);
   }
 
