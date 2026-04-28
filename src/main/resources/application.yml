@@ -19,14 +19,9 @@ spring:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
       group-id: order-service
-user:
-  service:
-    url: ${USER_SERVICE_URL:http://localhost:8081}
-resilience4j.circuitbreaker:
-  instances:
-    user-service:
-      failureRateThreshold: 50
-      waitDurationInOpenState: 5s
-      slidingWindowSize: 10
-jwt:
-  secret: ${JWT_SECRET}
+      auto-offset-reset: earliest
+      value-deserializer: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.innowise.orderservice.event
+        spring.json.use.type.headers: false
+        spring.json.value.default.type: com.innowise.orderservice.event.PaymentEvent
