@@ -20,11 +20,14 @@ public class KafkaConsumerConfig {
   @Value("${spring.kafka.bootstrap-servers}")
   private String bootstrapServers;
 
+  @Value("${spring.kafka.consumer.group-id:order-service}")
+  private String groupId;
+
   @Bean
   public ConsumerFactory<String, PaymentEvent> consumerFactory() {
     Map<String, Object> props = new HashMap<>();
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-    props.put(ConsumerConfig.GROUP_ID_CONFIG, "order-service");
+    props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);   // ⇐ теперь из свойства
     props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
     props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JacksonJsonDeserializer.class);
     props.put(JacksonJsonDeserializer.TRUSTED_PACKAGES, "com.innowise.orderservice.event");
