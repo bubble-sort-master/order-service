@@ -14,3 +14,21 @@ resilience4j.circuitbreaker:
       failureRateThreshold: 50
       waitDurationInOpenState: 5s
       slidingWindowSize: 10
+  kafka:
+    bootstrap-servers: ${spring.kafka.bootstrap-servers}  # будет переопределено DynamicPropertySource
+    consumer:
+      group-id: order-service-test
+      auto-offset-reset: earliest
+      value-deserializer: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.innowise.orderservice.event
+        spring.json.use.type.headers: false
+        spring.json.value.default.type: com.innowise.orderservice.event.PaymentEvent
+    producer: # на всякий случай для тестового продюсера
+      value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
+      properties:
+        spring.json.add.type.headers: false
+logging:
+  level:
+    org.springframework.kafka: DEBUG
+    org.apache.kafka: INFO
