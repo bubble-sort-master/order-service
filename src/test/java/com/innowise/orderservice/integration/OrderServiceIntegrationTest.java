@@ -143,7 +143,6 @@ class OrderServiceIntegrationTest {
     });
   }
 
-  // ---------- Kafka-тесты (без @Transactional) ----------
   @Test
   void kafkaListener_shouldUpdateOrderStatusToProcessingOnSuccess() throws Exception {
     Long userId = 1L;
@@ -184,7 +183,6 @@ class OrderServiceIntegrationTest {
     });
   }
 
-  // ---------- Остальные тесты с @Transactional (возвращаем назад) ----------
   @Test
   @Transactional
   void createOrder_shouldReturn201AndSaveOrder() throws Exception {
@@ -491,7 +489,6 @@ class OrderServiceIntegrationTest {
             .andExpect(status().isBadRequest());
   }
 
-  // ---------- вспомогательные методы ----------
   private void stubUserById(Long userId, String email, String name, String surname) {
     wireMockServer.stubFor(get(urlPathMatching("/api/users/" + userId))
             .willReturn(aResponse()

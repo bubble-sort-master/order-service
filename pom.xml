@@ -150,7 +150,6 @@
             <groupId>org.springframework.kafka</groupId>
             <artifactId>spring-kafka</artifactId>
         </dependency>
-        <!-- внутри <dependencies> -->
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>kafka</artifactId>
