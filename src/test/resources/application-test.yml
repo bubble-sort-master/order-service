@@ -2,32 +2,40 @@ spring:
   jpa:
     hibernate:
       ddl-auto: none
+
   cloud:
     openfeign:
       circuitbreaker:
         enabled: true
-jwt:
-  secret: super-secret-key-at-least-32-characters-long-for-hmac-sha256
-resilience4j.circuitbreaker:
-  instances:
-    user-service:
-      failureRateThreshold: 50
-      waitDurationInOpenState: 5s
-      slidingWindowSize: 10
+
   kafka:
-    bootstrap-servers: ${spring.kafka.bootstrap-servers}  # будет переопределено DynamicPropertySource
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
       group-id: order-service-test
       auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
       properties:
         spring.json.trusted.packages: com.innowise.orderservice.event
         spring.json.use.type.headers: false
         spring.json.value.default.type: com.innowise.orderservice.event.PaymentEvent
-    producer: # на всякий случай для тестового продюсера
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
       properties:
         spring.json.add.type.headers: false
+
+jwt:
+  secret: super-secret-key-at-least-32-characters-long-for-hmac-sha256
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      user-service:
+        failureRateThreshold: 50
+        waitDurationInOpenState: 5s
+        slidingWindowSize: 10
+
 logging:
   level:
     org.springframework.kafka: DEBUG

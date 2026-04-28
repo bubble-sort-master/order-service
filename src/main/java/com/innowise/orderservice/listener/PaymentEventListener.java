@@ -21,7 +21,8 @@ public class PaymentEventListener {
       orderService.processPaymentEvent(event);
       log.info("Successfully processed payment event for order {}", event.orderId());
     } catch (Exception e) {
-      log.error("Error processing payment event for order {}: {}", event.orderId(), e.getMessage());
+      log.error("Error processing payment event for order {}", event.orderId(), e);
+      throw e;
     }
   }
 }
