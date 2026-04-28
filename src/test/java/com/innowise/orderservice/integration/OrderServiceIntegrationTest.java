@@ -11,6 +11,7 @@ import com.innowise.orderservice.entity.Order;
 import com.innowise.orderservice.entity.OrderStatus;
 import com.innowise.orderservice.event.PaymentEvent;
 import com.innowise.orderservice.event.PaymentStatus;
+import com.innowise.orderservice.listener.PaymentEventListener;
 import com.innowise.orderservice.model.Money;
 import com.innowise.orderservice.repository.ItemRepository;
 import com.innowise.orderservice.repository.OrderRepository;
@@ -22,6 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -80,6 +82,12 @@ class OrderServiceIntegrationTest {
   @Autowired
   private KafkaTemplate<String, PaymentEvent> kafkaTemplate;
 
+  @Autowired(required = false)
+  private PaymentEventListener paymentEventListener;
+
+  @Autowired(required = false)
+  private KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
+
   private final ObjectMapper objectMapper = new ObjectMapper();
   private MockMvc mockMvc;
 
@@ -113,6 +121,26 @@ class OrderServiceIntegrationTest {
     wireMockServer.resetAll();
     orderRepository.deleteAll();
     itemRepository.deleteAll();
+  }
+
+  @Test
+  void debugKafkaListener_shouldBeRegistered() {
+    assertThat(paymentEventListener)
+            .as("PaymentEventListener bean должен быть в Spring context")
+            .isNotNull();
+
+    assertThat(kafkaListenerEndpointRegistry)
+            .as("KafkaListenerEndpointRegistry должен быть в Spring context")
+            .isNotNull();
+
+    assertThat(kafkaListenerEndpointRegistry.getListenerContainers())
+            .as("Должен быть хотя бы один Kafka listener container")
+            .isNotEmpty();
+
+    kafkaListenerEndpointRegistry.getListenerContainers().forEach(container -> {
+      System.out.println("Kafka container id = " + container.getListenerId());
+      System.out.println("Kafka container running = " + container.isRunning());
+    });
   }
 
   // ---------- Kafka-тесты (без @Transactional) ----------

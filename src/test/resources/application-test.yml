@@ -39,4 +39,9 @@ resilience4j:
 logging:
   level:
     org.springframework.kafka: DEBUG
+    org.springframework.kafka.listener: DEBUG
+    org.springframework.kafka.config: DEBUG
+    org.apache.kafka.clients.consumer: INFO
+    org.apache.kafka.clients.producer: INFO
     org.apache.kafka: INFO
+    com.innowise.orderservice.listener: DEBUG
