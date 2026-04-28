@@ -14,7 +14,7 @@ public class PaymentEventListener {
 
   private final OrderService orderService;
 
-  @KafkaListener(topics = "payment-events", groupId = "order-service")
+  @KafkaListener(topics = "payment-events")
   public void handlePaymentEvent(PaymentEvent event) {
     log.info("Received payment event for order {}: {}", event.orderId(), event.status());
     try {

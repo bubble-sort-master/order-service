@@ -40,6 +40,7 @@ import org.testcontainers.utility.DockerImageName;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
@@ -91,6 +92,7 @@ class OrderServiceIntegrationTest {
     registry.add("jwt.secret", () -> "super-secret-key-at-least-32-characters-long-for-hmac-sha256");
     registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
     registry.add("spring.kafka.consumer.auto-offset-reset", () -> "earliest");
+    registry.add("spring.kafka.consumer.group-id", () -> "order-service-test-" + UUID.randomUUID());
   }
 
   @BeforeAll
