@@ -1,0 +1,49 @@
+databaseChangeLog:
+  - changeSet:
+      id: 5
+      author: gleb elopov
+      changes:
+        - insert:
+            tableName: items
+            columns:
+              - column:
+                  name: id
+                  valueNumeric: 1
+              - column:
+                  name: name
+                  value: "Laptop"
+              - column:
+                  name: price
+                  valueNumeric: 150000
+              - column:
+                  name: created_at
+                  valueComputed: CURRENT_TIMESTAMP
+              - column:
+                  name: updated_at
+                  valueComputed: CURRENT_TIMESTAMP
+        - insert:
+            tableName: items
+            columns:
+              - column:
+                  name: id
+                  valueNumeric: 2
+              - column:
+                  name: name
+                  value: "Mouse"
+              - column:
+                  name: price
+                  valueNumeric: 2500
+              - column:
+                  name: created_at
+                  valueComputed: CURRENT_TIMESTAMP
+              - column:
+                  name: updated_at
+                  valueComputed: CURRENT_TIMESTAMP
+        - sql:
+            sql: "SELECT setval('items_id_seq', (SELECT MAX(id) FROM items));"
+      rollback:
+        - delete:
+            tableName: items
+            where: "id IN (1, 2)"
+        - sql:
+            sql: "SELECT setval('items_id_seq', 1);"

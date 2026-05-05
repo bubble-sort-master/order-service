@@ -11,3 +11,6 @@ databaseChangeLog:
   - include:
       file: 004-add-indexes.yaml
       relativeToChangelogFile: true
+  - include:
+      file: 005-insert-test-items.yaml
+      relativeToChangelogFile: true
