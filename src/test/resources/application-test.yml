@@ -1,0 +1,47 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: none
+
+  cloud:
+    openfeign:
+      circuitbreaker:
+        enabled: true
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: order-service-test
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.innowise.orderservice.event
+        spring.json.use.type.headers: false
+        spring.json.value.default.type: com.innowise.orderservice.event.PaymentEvent
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
+      properties:
+        spring.json.add.type.headers: false
+
+jwt:
+  secret: super-secret-key-at-least-32-characters-long-for-hmac-sha256
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      user-service:
+        failureRateThreshold: 50
+        waitDurationInOpenState: 5s
+        slidingWindowSize: 10
+
+logging:
+  level:
+    org.springframework.kafka: DEBUG
+    org.springframework.kafka.listener: DEBUG
+    org.springframework.kafka.config: DEBUG
+    org.apache.kafka.clients.consumer: INFO
+    org.apache.kafka.clients.producer: INFO
+    org.apache.kafka: INFO
+    com.innowise.orderservice.listener: DEBUG

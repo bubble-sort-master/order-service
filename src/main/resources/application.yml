@@ -1,1 +1,28 @@
-spring.application.name=order-service
+spring:
+  application:
+    name: order-service
+  cloud:
+    openfeign:
+      circuitbreaker:
+        enabled: true
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+    enabled: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: order-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.innowise.orderservice.event
+        spring.json.use.type.headers: false
+        spring.json.value.default.type: com.innowise.orderservice.event.PaymentEvent
