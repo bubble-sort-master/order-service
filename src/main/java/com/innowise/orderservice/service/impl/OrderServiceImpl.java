@@ -184,6 +184,10 @@ public class OrderServiceImpl implements OrderService {
   @Override
   @Transactional
   public void processPaymentEvent(PaymentEvent event) {
+    if (!PaymentEvent.TYPE_CREATE_PAYMENT.equals(event.eventType())) {
+      return;
+    }
+
     Order order = orderRepository.findById(event.orderId())
             .orElseThrow(() -> new OrderNotFoundException(event.orderId()));
 

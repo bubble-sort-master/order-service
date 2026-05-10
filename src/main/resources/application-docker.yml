@@ -12,3 +12,10 @@ spring:
       timeout: 2000
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+
+management:
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
